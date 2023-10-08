@@ -1,0 +1,39 @@
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  
+  ::-webkit-scrollbar {
+    width: 0.4rem;
+    height: 0.3rem;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #CDD9E5;
+    height: 3rem;
+    width: 5rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+}
+
+#app {
+  height: 100%;
+  overflow: auto;
+  /* scrollbar-gutter: stable; */
+}
+
+a {
+  color: inherit;
+  background-color: transparent;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+* {
+  outline: none;
+}
