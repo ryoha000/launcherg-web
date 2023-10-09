@@ -1,10 +1,7 @@
 import {
-  nowInSec,
-  SkyWayAuthToken,
   SkyWayContext,
   SkyWayRoom,
   SkyWayStreamFactory,
-  uuidV4,
   type RoomPublication,
   type LocalStream,
   type LocalDataStream,
@@ -29,6 +26,7 @@ export const useSkyWay = () => {
   const gameIdString = searchParams.get("gameId");
   const gameId = gameIdString ? +gameIdString : 0;
   const roomIdString = searchParams.get("roomId");
+  const seiyaUrl = searchParams.get("seiyaUrl");
 
   const hasSetting = gameIdString && roomIdString;
 
@@ -113,5 +111,5 @@ export const useSkyWay = () => {
     sendMessage(message);
   };
 
-  return { hasSetting, gameId, connect, syncMemo, cleanup };
+  return { hasSetting, gameId, seiyaUrl, connect, syncMemo, cleanup };
 };

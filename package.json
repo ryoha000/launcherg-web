@@ -34,8 +34,8 @@
   },
   "dependencies": {
     "@skyway-sdk/room": "^1.5.4",
+    "@tsndr/cloudflare-worker-jwt": "^2.2.5",
     "easymde": "^2.18.0",
-    "jsonwebtoken": "^9.0.2",
     "uuid": "^9.0.1"
   }
 }
