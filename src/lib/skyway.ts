@@ -6,7 +6,7 @@ import {
   type LocalStream,
   type LocalDataStream,
 } from "@skyway-sdk/room";
-import { memo } from "../store/memo";
+import { base64ImageStore, memo } from "../store/memo";
 
 type PingMessage = { type: "ping" };
 type MemoMessage = {
@@ -15,9 +15,15 @@ type MemoMessage = {
   gameId: number;
   base64Images: { path: string; base64: string }[];
 };
+type InitMessage = { type: "init"; gameId: number; memberId: string };
+type InitResponseMessage = {
+  type: "init_response";
+  gameId: number;
+  initialMemo: MemoMessage;
+};
 
-type LocalMessage = PingMessage | MemoMessage;
-type RemoteMessage = PingMessage | MemoMessage;
+type LocalMessage = PingMessage | MemoMessage | InitMessage;
+type RemoteMessage = PingMessage | MemoMessage | InitResponseMessage;
 
 export const useSkyWay = () => {
   const url = new URL(window.location.href);
@@ -55,19 +61,22 @@ export const useSkyWay = () => {
       "p2p"
     );
     const me = await room.join();
-    room.publications;
 
     const onPublicate = async (publication: RoomPublication<LocalStream>) => {
       if (publication.publisher.id === me.id) return;
       if (publication.contentType !== "data") return;
 
       const { stream } = await me.subscribe(publication.id);
+      sendInitMessage(me.id);
       if (stream.contentType !== "data") return;
 
       const { removeListener } = stream.onData.add((data) => {
         if (typeof data !== "string") return;
 
         const message: RemoteMessage = JSON.parse(data);
+        if (message.type !== "ping") {
+          console.log("receive message", message);
+        }
         switch (message.type) {
           case "ping":
             break;
@@ -78,7 +87,20 @@ export const useSkyWay = () => {
             }
             memo.set({ value: message.text, lastModified: "remote" });
             message.base64Images.forEach(({ path, base64 }) => {
-              memo.appendBase64Image(path, base64);
+              base64ImageStore.appendBase64Image(path, base64);
+            });
+            break;
+          case "init_response":
+            if (message.gameId !== gameId) {
+              console.warn("gameId is not match");
+              return;
+            }
+            memo.set({
+              value: message.initialMemo.text,
+              lastModified: "remote",
+            });
+            message.initialMemo.base64Images.forEach(({ path, base64 }) => {
+              base64ImageStore.appendBase64Image(path, base64);
             });
             break;
         }
@@ -87,14 +109,23 @@ export const useSkyWay = () => {
     };
 
     dataStream = await SkyWayStreamFactory.createDataStream();
-    await me.publish(dataStream);
+    const publication = await me.publish(dataStream);
+    publication.onSubscribed.add(() => sendInitMessage(me.id));
+    publication.onSubscriptionListChanged.add(() => sendInitMessage(me.id));
 
-    room.publications.forEach(onPublicate);
-    room.onStreamPublished.add((e) => onPublicate(e.publication));
+    const pingTimer = setInterval(() => {
+      if (!dataStream) return;
+      const message: PingMessage = { type: "ping" };
+      sendMessage(message);
+    }, 10000);
+    cleanupFuncs.push(() => clearInterval(pingTimer));
   };
 
   const sendMessage = (message: LocalMessage) => {
     if (!dataStream) return;
+    if (message.type !== "ping") {
+      console.log("send message", message);
+    }
 
     dataStream.write(JSON.stringify(message));
   };
@@ -105,10 +136,14 @@ export const useSkyWay = () => {
     const message: MemoMessage = {
       type: "memo",
       text,
-      gameId: gameId,
+      gameId,
       base64Images: [],
     };
     sendMessage(message);
+  };
+
+  const sendInitMessage = (memberId: string) => {
+    sendMessage({ type: "init", gameId, memberId });
   };
 
   return { hasSetting, gameId, seiyaUrl, connect, syncMemo, cleanup };

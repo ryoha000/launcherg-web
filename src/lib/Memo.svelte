@@ -1,7 +1,7 @@
 <script lang="ts">
   import EasyMDE from "easymde";
   import { createEventDispatcher } from "svelte";
-  import { memo } from "../store/memo";
+  import { base64ImageStore, memo } from "../store/memo";
 
   let height: number;
 
@@ -50,7 +50,16 @@
           title: "Insert image",
         },
       ],
-      imagesPreviewHandler: (imagePath) => memo.getBase64Image(imagePath),
+      imagesPreviewHandler: (imagePath) => {
+        const dataUrl = $base64ImageStore[imagePath];
+        if (dataUrl === undefined) {
+          setTimeout(() => {
+            easyMDE.value(easyMDE.value());
+          }, 10);
+          return "";
+        }
+        return dataUrl;
+      },
     });
 
     const syncTimer = setInterval(() => {
@@ -62,7 +71,7 @@
     }, 1000);
 
     const unsubscribe = memo.subscribe((value) => {
-      if (value.lastModified === "remote") {
+      if (value.lastModified === "remote" && easyMDE.value() !== value.value) {
         easyMDE.value(value.value);
       }
     });

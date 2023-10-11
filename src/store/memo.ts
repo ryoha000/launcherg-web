@@ -8,21 +8,22 @@ const createMemo = () => {
   const store = writable<{ value: string; lastModified: "remote" | "local" }>(
     initial
   );
-  const _base64ImageStore = {} as Base64ImageRecord;
-  const base64ImageStore = writable<Base64ImageRecord>({});
-  base64ImageStore.subscribe((value) => {
-    Object.assign(_base64ImageStore, value);
-  });
-  const getBase64Image = (path: string) => _base64ImageStore[path];
-  const appendBase64Image = (path: string, base64: string) => {
-    base64ImageStore.update((prev) => ({ ...prev, [path]: base64 }));
-  };
   const reset = () => store.set(initial);
   return {
     ...store,
     reset,
+  };
+};
+
+const createBase64ImageStore = () => {
+  const store = writable<Base64ImageRecord>({});
+  const appendBase64Image = (path: string, base64: string) => {
+    store.update((prev) => ({ ...prev, [path]: base64 }));
+  };
+  return {
+    ...store,
     appendBase64Image,
-    getBase64Image,
   };
 };
 export const memo = createMemo();
+export const base64ImageStore = createBase64ImageStore();
