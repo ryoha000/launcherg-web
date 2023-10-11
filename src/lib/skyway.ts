@@ -2,19 +2,17 @@ import {
   SkyWayContext,
   SkyWayRoom,
   SkyWayStreamFactory,
-  type RoomPublication,
-  type LocalStream,
   type LocalDataStream,
   RemoteDataStream,
 } from "@skyway-sdk/room";
 import { base64ImageStore, memo } from "../store/memo";
+import { useChunk } from "./chunk";
 
 type PingMessage = { type: "ping" };
 type MemoMessage = {
   type: "memo";
   text: string;
   gameId: number;
-  base64Images: { path: string; base64: string }[];
 };
 type InitMessage = { type: "init"; gameId: number };
 type InitResponseMessage = {
@@ -27,13 +25,24 @@ type TakeScreenshotMessage = {
   gameId: number;
   cursorLine: number;
 };
+type ImageMetadataMessage = {
+  type: "image_metadata";
+  path: string;
+  key: number;
+  totalChunkLength: number;
+  mimeType: string;
+};
 
 type LocalMessage =
   | PingMessage
   | MemoMessage
   | InitMessage
   | TakeScreenshotMessage;
-type RemoteMessage = PingMessage | MemoMessage | InitResponseMessage;
+type RemoteMessage =
+  | PingMessage
+  | MemoMessage
+  | InitResponseMessage
+  | ImageMetadataMessage;
 
 export const useSkyWay = () => {
   const url = new URL(window.location.href);
@@ -52,6 +61,7 @@ export const useSkyWay = () => {
   };
 
   let dataStream: LocalDataStream | undefined = undefined;
+  const { onArrayBufferData, onImageMetadata } = useChunk();
 
   const connect = async () => {
     if (!hasSetting) return;
@@ -73,6 +83,13 @@ export const useSkyWay = () => {
 
       const onSubscribe = async (stream: RemoteDataStream) => {
         const { removeListener } = stream.onData.add((data) => {
+          if (data instanceof ArrayBuffer) {
+            const res = onArrayBufferData(data);
+            if (res) {
+              base64ImageStore.appendBase64Image(res.path, res.dataUrl);
+            }
+          }
+
           if (typeof data !== "string") return;
 
           const message: RemoteMessage = JSON.parse(data);
@@ -88,9 +105,6 @@ export const useSkyWay = () => {
                 return;
               }
               memo.set({ value: message.text, lastModified: "remote" });
-              message.base64Images.forEach(({ path, base64 }) => {
-                base64ImageStore.appendBase64Image(path, base64);
-              });
               break;
             case "init_response":
               if (message.gameId !== gameId) {
@@ -101,10 +115,13 @@ export const useSkyWay = () => {
                 value: message.initialMemo.text,
                 lastModified: "remote",
               });
-              message.initialMemo.base64Images.forEach(({ path, base64 }) => {
-                base64ImageStore.appendBase64Image(path, base64);
-              });
               resolve(undefined);
+              break;
+            case "image_metadata":
+              const res = onImageMetadata(message);
+              if (res) {
+                base64ImageStore.appendBase64Image(res.path, res.dataUrl);
+              }
               break;
           }
         });
@@ -147,7 +164,6 @@ export const useSkyWay = () => {
       type: "memo",
       text,
       gameId,
-      base64Images: [],
     };
     sendMessage(message);
   };
