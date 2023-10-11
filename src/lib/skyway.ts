@@ -5,6 +5,7 @@ import {
   type RoomPublication,
   type LocalStream,
   type LocalDataStream,
+  RemoteDataStream,
 } from "@skyway-sdk/room";
 import { base64ImageStore, memo } from "../store/memo";
 
@@ -15,14 +16,23 @@ type MemoMessage = {
   gameId: number;
   base64Images: { path: string; base64: string }[];
 };
-type InitMessage = { type: "init"; gameId: number; memberId: string };
+type InitMessage = { type: "init"; gameId: number };
 type InitResponseMessage = {
   type: "init_response";
   gameId: number;
   initialMemo: MemoMessage;
 };
+type TakeScreenshotMessage = {
+  type: "take_screenshot";
+  gameId: number;
+  cursorLine: number;
+};
 
-type LocalMessage = PingMessage | MemoMessage | InitMessage;
+type LocalMessage =
+  | PingMessage
+  | MemoMessage
+  | InitMessage
+  | TakeScreenshotMessage;
 type RemoteMessage = PingMessage | MemoMessage | InitResponseMessage;
 
 export const useSkyWay = () => {
@@ -62,14 +72,7 @@ export const useSkyWay = () => {
     );
     const me = await room.join();
 
-    const onPublicate = async (publication: RoomPublication<LocalStream>) => {
-      if (publication.publisher.id === me.id) return;
-      if (publication.contentType !== "data") return;
-
-      const { stream } = await me.subscribe(publication.id);
-      sendInitMessage(me.id);
-      if (stream.contentType !== "data") return;
-
+    const onSubscribe = async (stream: RemoteDataStream) => {
       const { removeListener } = stream.onData.add((data) => {
         if (typeof data !== "string") return;
 
@@ -106,12 +109,18 @@ export const useSkyWay = () => {
         }
       });
       cleanupFuncs.push(removeListener);
+
+      sendInitMessage();
     };
 
     dataStream = await SkyWayStreamFactory.createDataStream();
-    const publication = await me.publish(dataStream);
-    publication.onSubscribed.add(() => sendInitMessage(me.id));
-    publication.onSubscriptionListChanged.add(() => sendInitMessage(me.id));
+    await me.publish(dataStream);
+
+    me.onPublicationSubscribed.add(({ stream, subscription }) => {
+      if (stream.contentType === "data") {
+        onSubscribe(stream);
+      }
+    });
 
     const pingTimer = setInterval(() => {
       if (!dataStream) return;
@@ -142,9 +151,21 @@ export const useSkyWay = () => {
     sendMessage(message);
   };
 
-  const sendInitMessage = (memberId: string) => {
-    sendMessage({ type: "init", gameId, memberId });
+  const sendInitMessage = () => {
+    sendMessage({ type: "init", gameId });
   };
 
-  return { hasSetting, gameId, seiyaUrl, connect, syncMemo, cleanup };
+  const takeScreenshot = async (cursorLine: number) => {
+    sendMessage({ type: "take_screenshot", gameId, cursorLine });
+  };
+
+  return {
+    hasSetting,
+    gameId,
+    seiyaUrl,
+    takeScreenshot,
+    connect,
+    syncMemo,
+    cleanup,
+  };
 };
