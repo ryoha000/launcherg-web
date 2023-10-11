@@ -55,79 +55,80 @@ export const useSkyWay = () => {
 
   const connect = async () => {
     if (!hasSetting) return;
-    const { authToken }: { authToken: string } = await fetch("/connect", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-    }).then((res) => res.json());
+    return new Promise(async (resolve) => {
+      const { authToken }: { authToken: string } = await fetch("/connect", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+      }).then((res) => res.json());
 
-    const context = await SkyWayContext.Create(authToken);
-    const room = await SkyWayRoom.Find(
-      context,
-      {
-        name: roomIdString,
-      },
-      "p2p"
-    );
-    const me = await room.join();
+      const context = await SkyWayContext.Create(authToken);
+      const room = await SkyWayRoom.Find(
+        context,
+        { name: roomIdString },
+        "p2p"
+      );
+      const me = await room.join();
 
-    const onSubscribe = async (stream: RemoteDataStream) => {
-      const { removeListener } = stream.onData.add((data) => {
-        if (typeof data !== "string") return;
+      const onSubscribe = async (stream: RemoteDataStream) => {
+        const { removeListener } = stream.onData.add((data) => {
+          if (typeof data !== "string") return;
 
-        const message: RemoteMessage = JSON.parse(data);
-        if (message.type !== "ping") {
-          console.log("receive message", message);
-        }
-        switch (message.type) {
-          case "ping":
-            break;
-          case "memo":
-            if (message.gameId !== gameId) {
-              console.warn("gameId is not match");
-              return;
-            }
-            memo.set({ value: message.text, lastModified: "remote" });
-            message.base64Images.forEach(({ path, base64 }) => {
-              base64ImageStore.appendBase64Image(path, base64);
-            });
-            break;
-          case "init_response":
-            if (message.gameId !== gameId) {
-              console.warn("gameId is not match");
-              return;
-            }
-            memo.set({
-              value: message.initialMemo.text,
-              lastModified: "remote",
-            });
-            message.initialMemo.base64Images.forEach(({ path, base64 }) => {
-              base64ImageStore.appendBase64Image(path, base64);
-            });
-            break;
+          const message: RemoteMessage = JSON.parse(data);
+          if (message.type !== "ping") {
+            console.log("receive message", message);
+          }
+          switch (message.type) {
+            case "ping":
+              break;
+            case "memo":
+              if (message.gameId !== gameId) {
+                console.warn("gameId is not match");
+                return;
+              }
+              memo.set({ value: message.text, lastModified: "remote" });
+              message.base64Images.forEach(({ path, base64 }) => {
+                base64ImageStore.appendBase64Image(path, base64);
+              });
+              break;
+            case "init_response":
+              if (message.gameId !== gameId) {
+                console.warn("gameId is not match");
+                return;
+              }
+              memo.set({
+                value: message.initialMemo.text,
+                lastModified: "remote",
+              });
+              message.initialMemo.base64Images.forEach(({ path, base64 }) => {
+                base64ImageStore.appendBase64Image(path, base64);
+              });
+              resolve(undefined);
+              break;
+          }
+        });
+        cleanupFuncs.push(removeListener);
+
+        sendInitMessage();
+      };
+
+      dataStream = await SkyWayStreamFactory.createDataStream();
+      await me.publish(dataStream);
+
+      me.onPublicationSubscribed.add(({ stream }) => {
+        if (stream.contentType === "data") {
+          onSubscribe(stream);
         }
       });
-      cleanupFuncs.push(removeListener);
 
-      sendInitMessage();
-    };
-
-    dataStream = await SkyWayStreamFactory.createDataStream();
-    await me.publish(dataStream);
-
-    me.onPublicationSubscribed.add(({ stream, subscription }) => {
-      if (stream.contentType === "data") {
-        onSubscribe(stream);
-      }
+      const pingTimer = setInterval(() => {
+        if (!dataStream) return;
+        const message: PingMessage = { type: "ping" };
+        sendMessage(message);
+      }, 10000);
+      cleanupFuncs.push(() => clearInterval(pingTimer));
     });
-
-    const pingTimer = setInterval(() => {
-      if (!dataStream) return;
-      const message: PingMessage = { type: "ping" };
-      sendMessage(message);
-    }, 10000);
-    cleanupFuncs.push(() => clearInterval(pingTimer));
   };
 
   const sendMessage = (message: LocalMessage) => {
