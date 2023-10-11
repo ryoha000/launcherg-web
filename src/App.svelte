@@ -6,8 +6,15 @@
   import Memo from "./lib/Memo.svelte";
   import Link from "./lib/Link.svelte";
 
-  const { seiyaUrl, gameId, hasSetting, connect, cleanup, syncMemo } =
-    useSkyWay();
+  const {
+    seiyaUrl,
+    gameId,
+    hasSetting,
+    connect,
+    cleanup,
+    syncMemo,
+    takeScreenshot,
+  } = useSkyWay();
 
   $: connectPromise = connect();
   onDestroy(cleanup);
@@ -34,7 +41,10 @@
           >
           <Link href={seiyaUrl ?? ""} withIcon>誠也の部屋</Link>
         </div>
-        <Memo on:sync={(e) => syncMemo(e.detail.value)} />
+        <Memo
+          on:sync={(e) => syncMemo(e.detail.value)}
+          on:takeScreenshot={(e) => takeScreenshot(e.detail.cursorLine)}
+        />
       </div>
     {/await}
   {:else}

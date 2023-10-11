@@ -9,6 +9,9 @@
     sync: {
       value: string;
     };
+    takeScreenshot: {
+      cursorLine: number;
+    };
   }>();
 
   const mde = (node: HTMLElement) => {
@@ -29,25 +32,13 @@
         "|",
         "link",
         {
-          name: "image",
+          name: "screenshot",
           action: async () => {
-            alert("not implemented");
-            // const selected = await open({
-            //   multiple: false,
-            //   filters: [
-            //     {
-            //       name: "Image",
-            //       extensions: ["png", "jpeg", "jpg", "*"],
-            //     },
-            //   ],
-            // });
-            // if (selected === null || Array.isArray(selected)) {
-            //   return;
-            // }
-            // insertImage(selected);
+            const cursor = easyMDE.codemirror.getCursor();
+            dispather("takeScreenshot", { cursorLine: cursor.line });
           },
-          className: "fa fa-picture-o",
-          title: "Insert image",
+          className: "fa fa-desktop",
+          title: "Insert screenshot",
         },
       ],
       imagesPreviewHandler: (imagePath) => {
